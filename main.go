@@ -71,6 +71,7 @@ func main() {
 			}
 			logrus.Infof("mqtt publish done mac:%v payload:%v", mac, string(data))
 		}
+		client.Disconnect(0)
 		logrus.Info("fetch data end")
 	})
 	if err != nil {
