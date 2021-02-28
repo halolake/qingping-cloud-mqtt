@@ -19,6 +19,8 @@ import (
 )
 
 func main() {
+	logrus.Info("system start")
+
 	appKey := os.Getenv("APP_KEY")
 	appSecret := os.Getenv("APP_SECRET")
 
@@ -27,8 +29,24 @@ func main() {
 	mqttUsername := os.Getenv("MQTT_USERNAME")
 	mqttPassword := os.Getenv("MQTT_PASSWORD")
 
+	logrus.Info("mqtt connect begin")
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(fmt.Sprintf("tcp://%s:%d", mqttHost, mqttPort))
+	opts.SetClientID(fmt.Sprintf("qcm-%s", uuid.New().String()))
+	opts.SetUsername(mqttUsername)
+	opts.SetPassword(mqttPassword)
+	client := mqtt.NewClient(opts)
+	connectToken := client.Connect()
+	connectToken.Wait()
+	err := connectToken.Error()
+	if err != nil {
+		logrus.WithError(err).Error("mqtt connect error")
+		panic(err)
+	}
+	logrus.Info("mqtt connect done")
+
 	c := cron.New()
-	_, err := c.AddFunc("* * * * *", func() {
+	_, err = c.AddFunc("* * * * *", func() {
 		logrus.Info("fetch data begin")
 		accessToken, err := accessToken(appKey, appSecret)
 		if err != nil {
@@ -42,20 +60,6 @@ func main() {
 			return
 		}
 		logrus.Infof("device data:%+v", deviceDataMap)
-		opts := mqtt.NewClientOptions()
-		opts.AddBroker(fmt.Sprintf("tcp://%s:%d", mqttHost, mqttPort))
-		opts.SetClientID(fmt.Sprintf("qcm-%s", uuid.New().String()))
-		opts.SetUsername(mqttUsername)
-		opts.SetPassword(mqttPassword)
-		client := mqtt.NewClient(opts)
-		connectToken := client.Connect()
-		connectToken.Wait()
-		err = connectToken.Error()
-		if err != nil {
-			logrus.WithError(err).Error("mqtt connect error")
-			return
-		}
-		logrus.Info("mqtt connect done")
 		for mac, deviceData := range deviceDataMap {
 			data, err := json.Marshal(deviceData)
 			if err != nil {
@@ -71,7 +75,6 @@ func main() {
 			}
 			logrus.Infof("mqtt publish done mac:%v payload:%v", mac, string(data))
 		}
-		client.Disconnect(0)
 		logrus.Info("fetch data end")
 	})
 	if err != nil {
